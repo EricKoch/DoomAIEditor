@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build *)",
+      "Bash(dotnet run *)",
+      "Skill(claude-api)",
+      "Bash(dotnet add *)",
+      "Bash(unzip -p anthropic.12.17.0.nupkg README.md)",
+      "Bash(unzip -l anthropic.12.17.0.nupkg)",
+      "Bash(grep -E \"\\\\.cs$\")",
+      "Bash(cd /tmp)",
+      "Bash(cp /c/Users/erick/.nuget/packages/anthropic/12.17.0/anthropic.12.17.0.nupkg .)",
+      "Bash(unzip -p anthropic.12.17.0.nupkg lib/net8.0/Anthropic.xml)",
+      "Bash(dotnet list *)",
+      "Bash(cat)",
+      "Read(//tmp/**)"
+    ]
+  }
+}
