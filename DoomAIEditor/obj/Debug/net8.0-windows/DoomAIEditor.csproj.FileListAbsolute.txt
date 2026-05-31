@@ -44,3 +44,4 @@ C:\Dev\DoomAIEditor\DoomAIEditor\obj\Debug\net8.0-windows\refint\DoomAIEditor.dl
 C:\Dev\DoomAIEditor\DoomAIEditor\obj\Debug\net8.0-windows\DoomAIEditor.pdb
 C:\Dev\DoomAIEditor\DoomAIEditor\obj\Debug\net8.0-windows\DoomAIEditor.genruntimeconfig.cache
 C:\Dev\DoomAIEditor\DoomAIEditor\obj\Debug\net8.0-windows\ref\DoomAIEditor.dll
+C:\dev\DoomAIEditor\DoomAIEditor\obj\Debug\net8.0-windows\DoomAIEditor.sourcelink.json

@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Dev\\DoomAIEditor\\DoomAIEditor\\DoomAIEditor.csproj": {}
+    "C:\\dev\\DoomAIEditor\\DoomAIEditor\\DoomAIEditor.csproj": {}
   },
   "projects": {
-    "C:\\Dev\\DoomAIEditor\\DoomAIEditor\\DoomAIEditor.csproj": {
+    "C:\\dev\\DoomAIEditor\\DoomAIEditor\\DoomAIEditor.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Dev\\DoomAIEditor\\DoomAIEditor\\DoomAIEditor.csproj",
+        "projectUniqueName": "C:\\dev\\DoomAIEditor\\DoomAIEditor\\DoomAIEditor.csproj",
         "projectName": "DoomAIEditor",
-        "projectPath": "C:\\Dev\\DoomAIEditor\\DoomAIEditor\\DoomAIEditor.csproj",
+        "projectPath": "C:\\dev\\DoomAIEditor\\DoomAIEditor\\DoomAIEditor.csproj",
         "packagesPath": "C:\\Users\\erick\\.nuget\\packages\\",
-        "outputPath": "C:\\Dev\\DoomAIEditor\\DoomAIEditor\\obj\\",
+        "outputPath": "C:\\dev\\DoomAIEditor\\DoomAIEditor\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

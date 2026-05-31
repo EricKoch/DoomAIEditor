@@ -29,7 +29,7 @@ public class ClaudePanel : Panel
     {
         var doc = JsonDocument.Parse(json);
         return InputSchema.FromRawUnchecked(
-            doc.RootElement.EnumerateObject().ToDictionary(p => p.Name, p => p.Value));
+            doc.RootElement.EnumerateObject().GroupBy(p => p.Name).ToDictionary(g => g.Key, g => g.Last().Value));
     }
 
     static InputSchema EmptyInputSchema() => BuildSchema("""{"type":"object","properties":{}}""");
@@ -344,6 +344,101 @@ public class ClaudePanel : Panel
             Name = "clear_map",
             Description = "Removes all geometry (vertices, linedefs, sidedefs, sectors) and all things from the map, leaving it completely empty. Use this before building a new map from scratch.",
             InputSchema = EmptyInputSchema()
+        },
+        new Tool
+        {
+            Name = "add_corridor",
+            Description = "Creates a corridor (narrow rectangular room) with corridor-appropriate defaults. Use small Width or Height (64–128) for one dimension to make a hallway. Place it so its ends touch adjacent rooms, then the rooms will visually connect (geometry only — no two-sided linking).",
+            InputSchema = BuildSchema("""
+            {
+              "type": "object",
+              "properties": {
+                "X":              {"type":"integer","description":"Left edge X coordinate"},
+                "Y":              {"type":"integer","description":"Bottom edge Y coordinate"},
+                "Width":          {"type":"integer","description":"East-west size in Doom units (64–128 for a corridor width)"},
+                "Height":         {"type":"integer","description":"North-south size in Doom units (64–128 for a corridor width)"},
+                "FloorHeight":    {"type":"integer","description":"Floor height (default 0)"},
+                "CeilingHeight":  {"type":"integer","description":"Ceiling height (default 128)"},
+                "FloorTexture":   {"type":"string", "description":"Floor texture (default FLAT1)"},
+                "CeilingTexture": {"type":"string", "description":"Ceiling texture (default CEIL3_5)"},
+                "WallTexture":    {"type":"string", "description":"Wall texture (default STARTAN3)"},
+                "LightLevel":     {"type":"integer","description":"Light level 0-255 (default 144)"}
+              },
+              "required": ["X","Y","Width","Height"]
+            }
+            """)
+        },
+        new Tool
+        {
+            Name = "add_door",
+            Description = "Creates a functional Doom door sector (Special 1 = DR Open/Wait/Close). The door starts closed (ceiling=floor). IMPORTANT: Rooms must have a GAP between them equal to the door Depth — the door sector fills that gap. Example for 'ns': room A north wall at Y=256, room B south wall at Y=272, place door at Y=256 Depth=16. Example for 'ew': room A east wall at X=256, room B west wall at X=272, place door at X=256 Width=16. Width is ALWAYS east-west (X); Depth is ALWAYS north-south (Y). 'ns'=rooms are north+south, Width=opening (e.g. 128), Depth=thickness (e.g. 16). 'ew'=rooms are east+west, Width=thickness (e.g. 16), Depth=opening (e.g. 128).",
+            InputSchema = BuildSchema("""
+            {
+              "type": "object",
+              "properties": {
+                "X":              {"type":"integer","description":"Left/bottom corner of door sector"},
+                "Y":              {"type":"integer","description":"Bottom corner of door sector"},
+                "Width":          {"type":"integer","description":"Size along the door's opening axis (match corridor width, e.g. 128)"},
+                "Depth":          {"type":"integer","description":"Thickness of door sector perpendicular to the opening (16–32 typical)"},
+                "Orientation":    {"type":"string", "description":"'ns' (door spans X, rooms north+south) or 'ew' (door spans Y, rooms east+west). Default 'ns'"},
+                "FrontSectorIdx": {"type":"integer","description":"Sector index of the room on the south (ns) or west (ew) side"},
+                "BackSectorIdx":  {"type":"integer","description":"Sector index of the room on the north (ns) or east (ew) side"},
+                "FloorHeight":    {"type":"integer","description":"Door floor height — should match adjacent rooms (default 0)"},
+                "DoorTexture":    {"type":"string", "description":"Texture on the door face, max 8 chars (default BIGDOOR2)"},
+                "LightLevel":     {"type":"integer","description":"Light level 0-255 (default 160)"}
+              },
+              "required": ["X","Y","Width","Depth","FrontSectorIdx","BackSectorIdx"]
+            }
+            """)
+        },
+        new Tool
+        {
+            Name = "add_arena",
+            Description = "Creates a large combat room and fills it with a grid of enemies. Optionally places a Player 1 Start in the center. Good for boss fights or intense encounters.",
+            InputSchema = BuildSchema("""
+            {
+              "type": "object",
+              "properties": {
+                "X":              {"type":"integer","description":"Left edge X coordinate"},
+                "Y":              {"type":"integer","description":"Bottom edge Y coordinate"},
+                "Width":          {"type":"integer","description":"Width in Doom units (256–1024 recommended)"},
+                "Height":         {"type":"integer","description":"Height in Doom units (256–1024 recommended)"},
+                "EnemyType":      {"type":"integer","description":"Thing type for enemies: 3001=Imp, 3002=Demon, 3003=Baron, 3004=Zombie, 3005=Cacodemon, 16=Cyberdemon (default 3001)"},
+                "EnemyCount":     {"type":"integer","description":"Number of enemies to place, 1–16 (default 4)"},
+                "AddPlayerStart": {"type":"boolean","description":"Add a Player 1 Start in the center (default false)"},
+                "FloorHeight":    {"type":"integer","description":"Floor height (default 0)"},
+                "CeilingHeight":  {"type":"integer","description":"Ceiling height (default 192)"},
+                "FloorTexture":   {"type":"string", "description":"Floor texture (default FLOOR6_1)"},
+                "CeilingTexture": {"type":"string", "description":"Ceiling texture (default CEIL5_1)"},
+                "WallTexture":    {"type":"string", "description":"Wall texture (default STONE2)"},
+                "LightLevel":     {"type":"integer","description":"Light level 0-255 (default 200)"}
+              },
+              "required": ["X","Y","Width","Height"]
+            }
+            """)
+        },
+        new Tool
+        {
+            Name = "apply_template",
+            Description = "Places a pre-designed multi-room layout at the given origin. Templates: 'dungeon_start' = entrance room + 2 side rooms + north corridor; 'cross' = central hub + 4 arms; 'L_shape' = two rooms at a right angle; 'boss_room' = antechamber + large arena with Baron of Hell. All rooms are separate sectors (geometry only, no two-sided linking). Scale multiplies all dimensions.",
+            InputSchema = BuildSchema("""
+            {
+              "type": "object",
+              "properties": {
+                "Template":       {"type":"string", "description":"'dungeon_start', 'cross', 'L_shape', or 'boss_room'"},
+                "X":              {"type":"integer","description":"Origin X (left edge of bounding box)"},
+                "Y":              {"type":"integer","description":"Origin Y (bottom edge of bounding box)"},
+                "Scale":          {"type":"integer","description":"Size multiplier: 1=normal (~512 units), 2=double (default 1)"},
+                "WallTexture":    {"type":"string", "description":"Wall texture for all rooms (default STARTAN3)"},
+                "FloorTexture":   {"type":"string", "description":"Floor texture for all rooms (default FLOOR4_8)"},
+                "CeilingTexture": {"type":"string", "description":"Ceiling texture for all rooms (default CEIL3_5)"},
+                "LightLevel":     {"type":"integer","description":"Base light level 0-255 (default 160)"},
+                "AddEnemies":     {"type":"boolean","description":"Populate with enemies (default true)"},
+                "AddPlayerStart": {"type":"boolean","description":"Add Player 1 Start in starting room (default true)"}
+              },
+              "required": ["Template","X","Y"]
+            }
+            """)
         }
     };
 
@@ -358,6 +453,10 @@ public class ClaudePanel : Panel
         sb.AppendLine();
         sb.AppendLine("Tool summary:");
         sb.AppendLine("  add_room(X,Y,Width,Height,...) — creates a rectangular sector with walls");
+        sb.AppendLine("  add_corridor(X,Y,Width,Height,...) — narrow room, corridor defaults (FLAT1 floor, light=144)");
+        sb.AppendLine("  add_door(X,Y,Width,Depth,Orientation,FrontSectorIdx,BackSectorIdx,...) — DR door in the GAP between two rooms; rooms must be separated by exactly Depth (ns) or Width (ew) units; Width=EW, Depth=NS always");
+        sb.AppendLine("  add_arena(X,Y,Width,Height,EnemyType,EnemyCount,...) — large room pre-filled with monsters in a grid");
+        sb.AppendLine("  apply_template(Template,X,Y,Scale,...) — multi-room layout: 'dungeon_start','cross','L_shape','boss_room'");
         sb.AppendLine("  add_thing(X,Y,Type,Angle) — places a monster/item/player start");
         sb.AppendLine("  modify_sector(SectorIndex,...) — changes heights/textures/light");
         sb.AppendLine("  modify_thing(ThingIndex,...) — moves or changes a thing");
@@ -370,6 +469,11 @@ public class ClaudePanel : Panel
         sb.AppendLine();
         sb.AppendLine("Coordinate system: X=east, Y=north. Use 64-unit grid. Player 1 Start (type 1) is required to play.");
         sb.AppendLine("Typical room sizes: 128–512 units. Ceiling height 128 is standard.");
+        sb.AppendLine("Room and door placement rules:");
+        sb.AppendLine("  - Rooms connected by a door MUST have a gap between them. The door sector fills that gap.");
+        sb.AppendLine("  - The gap size must equal the door Depth. Example: room A north wall at Y=256, door Depth=16, room B south wall at Y=272. Place door at Y=256 with Depth=16.");
+        sb.AppendLine("  - Rooms with NO connection must also have a gap of at least 64 units between their walls.");
+        sb.AppendLine("  - Never place rooms so their walls touch or overlap.");
         sb.AppendLine();
 
         string fileName = _state.WadPath != null ? Path.GetFileName(_state.WadPath) : "(unsaved)";
@@ -513,7 +617,7 @@ public class ClaudePanel : Panel
                         Input = JsonDocument.Parse(
                                     tc.InputJson.Length > 0 ? tc.InputJson.ToString() : "{}")
                                 .RootElement.EnumerateObject()
-                                .ToDictionary(p => p.Name, p => p.Value)
+                                .GroupBy(p => p.Name).ToDictionary(g => g.Key, g => g.Last().Value)
                     });
 
                 _history.Add(new MessageParam { Role = Role.Assistant, Content = assistantContent });
@@ -587,6 +691,10 @@ public class ClaudePanel : Panel
         "get_raw_map_data"  => DoGetRawMapData(),
         "set_raw_map_data"  => DoSetRawMapData(input),
         "clear_map"         => DoClearMap(),
+        "add_corridor"      => DoAddCorridor(input),
+        "add_door"          => DoAddDoor(input),
+        "add_arena"         => DoAddArena(input),
+        "apply_template"    => DoApplyTemplate(input),
         _                   => throw new ArgumentException($"Unknown tool: {name}")
     };
 
@@ -602,23 +710,24 @@ public class ClaudePanel : Panel
         string ceTex = Truncate8(GetStr(input, "CeilingTexture", "CEIL3_5"));
         string wTex  = Truncate8(GetStr(input, "WallTexture", "STARTAN3"));
         int light    = GetInt(input, "LightLevel", 160);
+        return AddRoomCore(x, y, width, height, floorH, ceilH, flTex, ceTex, wTex, light);
+    }
 
+    string AddRoomCore(int x, int y, int width, int height, int floorH, int ceilH,
+                       string flTex, string ceTex, string wTex, int light)
+    {
         if (width <= 0 || height <= 0)
             throw new ArgumentException("Width and Height must be > 0");
 
-        var map    = _state.Map;
-        int vBase  = map.Vertices.Count;
-        int sdBase = map.Sidedefs.Count;
-        int sBase  = map.Sectors.Count;
+        var map   = _state.Map;
+        int sBase = map.Sectors.Count;
 
-        // 4 vertices CCW (front sidedef faces inward):
-        // V0 bottom-left, V1 top-left, V2 top-right, V3 bottom-right
-        map.Vertices.Add(new DoomVertex((short)x,          (short)y));
-        map.Vertices.Add(new DoomVertex((short)x,          (short)(y + height)));
-        map.Vertices.Add(new DoomVertex((short)(x + width),(short)(y + height)));
-        map.Vertices.Add(new DoomVertex((short)(x + width),(short)y));
+        // Reuse existing vertices at shared corners rather than always creating new ones
+        int v0 = GetOrCreateVertex(x,         y);
+        int v1 = GetOrCreateVertex(x,         y + height);
+        int v2 = GetOrCreateVertex(x + width, y + height);
+        int v3 = GetOrCreateVertex(x + width, y);
 
-        // sector
         map.Sectors.Add(new DoomSector
         {
             FloorHeight    = (short)floorH,
@@ -628,25 +737,49 @@ public class ClaudePanel : Panel
             LightLevel     = (short)Math.Clamp(light, 0, 255)
         });
 
-        // 4 sidedefs (all for this sector, middle texture = wall)
+        // Create each wall only if that exact linedef doesn't already exist
+        int skipped = 0;
+        int[] sv = { v0, v1, v2, v3 };
+        int[] ev = { v1, v2, v3, v0 };
         for (int i = 0; i < 4; i++)
+        {
+            if (LinedefExists(sv[i], ev[i]))
+            {
+                skipped++;
+                continue;
+            }
+            int sdIdx = map.Sidedefs.Count;
             map.Sidedefs.Add(new DoomSidedef { MiddleTexture = wTex, Sector = sBase });
-
-        // 4 linedefs: V0→V1 (west), V1→V2 (north), V2→V3 (east), V3→V0 (south)
-        int[,] ldv = { { vBase, vBase+1 }, { vBase+1, vBase+2 }, { vBase+2, vBase+3 }, { vBase+3, vBase } };
-        for (int i = 0; i < 4; i++)
             map.Linedefs.Add(new DoomLinedef
             {
-                StartVertex  = ldv[i, 0],
-                EndVertex    = ldv[i, 1],
-                Flags        = 1, // impassable
-                FrontSidedef = sdBase + i,
+                StartVertex  = sv[i],
+                EndVertex    = ev[i],
+                Flags        = 1,
+                FrontSidedef = sdIdx,
                 BackSidedef  = -1
             });
+        }
 
         _state.NotifyChanged();
-        return $"Sector {sBase} created at ({x},{y}) size {width}x{height}";
+        string result = $"Sector {sBase} created at ({x},{y}) size {width}x{height}";
+        if (skipped > 0)
+            result += $" ({skipped} wall(s) skipped — already existed at that position)";
+        return result;
     }
+
+    // Returns true if a linedef already connects v1↔v2 in either direction.
+    bool LinedefExists(int v1, int v2) =>
+        _state.Map.Linedefs.Any(ld =>
+            (ld.StartVertex == v1 && ld.EndVertex == v2) ||
+            (ld.StartVertex == v2 && ld.EndVertex == v1));
+
+    void AddThingRaw(int x, int y, int type, int angle) =>
+        _state.Map.Things.Add(new DoomThing
+        {
+            X = (short)x, Y = (short)y,
+            Type = (short)type, Angle = (short)angle,
+            Flags = 7
+        });
 
     string DoAddThing(JsonElement input)
     {
@@ -1036,6 +1169,388 @@ public class ClaudePanel : Panel
     {
         if (sdIdx < 0 || sdIdx >= map.Sidedefs.Count) return "none";
         return map.Sidedefs[sdIdx].Sector.ToString();
+    }
+
+    string DoAddCorridor(JsonElement input)
+    {
+        int x       = GetInt(input, "X");
+        int y       = GetInt(input, "Y");
+        int width   = GetInt(input, "Width", 128);
+        int height  = GetInt(input, "Height", 128);
+        int floorH  = GetInt(input, "FloorHeight", 0);
+        int ceilH   = GetInt(input, "CeilingHeight", 128);
+        string flTex = Truncate8(GetStr(input, "FloorTexture", "FLAT1"));
+        string ceTex = Truncate8(GetStr(input, "CeilingTexture", "CEIL3_5"));
+        string wTex  = Truncate8(GetStr(input, "WallTexture", "STARTAN3"));
+        int light   = GetInt(input, "LightLevel", 144);
+        return AddRoomCore(x, y, width, height, floorH, ceilH, flTex, ceTex, wTex, light);
+    }
+
+    // ── Door wall-splitting helpers ───────────────────────────────────────
+
+    int GetOrCreateVertex(int x, int y)
+    {
+        var map = _state.Map;
+        for (int i = 0; i < map.Vertices.Count; i++)
+            if (map.Vertices[i].X == x && map.Vertices[i].Y == y) return i;
+        map.Vertices.Add(new DoomVertex((short)x, (short)y));
+        return map.Vertices.Count - 1;
+    }
+
+    void RemoveLinedefAt(int ldIdx)
+    {
+        var map = _state.Map;
+        var ld = map.Linedefs[ldIdx];
+        var sdToRemove = new List<int>();
+        if (ld.FrontSidedef >= 0 && ld.FrontSidedef < map.Sidedefs.Count)
+            sdToRemove.Add(ld.FrontSidedef);
+        if (ld.BackSidedef >= 0 && ld.BackSidedef < map.Sidedefs.Count && ld.BackSidedef != ld.FrontSidedef)
+            sdToRemove.Add(ld.BackSidedef);
+        sdToRemove.Sort((a, b) => b.CompareTo(a));
+        map.Linedefs.RemoveAt(ldIdx);
+        foreach (int sdIdx in sdToRemove)
+        {
+            map.Sidedefs.RemoveAt(sdIdx);
+            foreach (var l in map.Linedefs)
+            {
+                if (l.FrontSidedef > sdIdx) l.FrontSidedef--;
+                if (l.BackSidedef  > sdIdx) l.BackSidedef--;
+            }
+        }
+    }
+
+    int AddSideDef(int sector, string upper, string middle, string lower)
+    {
+        _state.Map.Sidedefs.Add(new DoomSidedef { Sector = sector, UpperTexture = upper, MiddleTexture = middle, LowerTexture = lower });
+        return _state.Map.Sidedefs.Count - 1;
+    }
+
+    void AddLD1(int sv, int ev, int frontSd, short flags = 1) =>
+        _state.Map.Linedefs.Add(new DoomLinedef { StartVertex = sv, EndVertex = ev, Flags = flags, FrontSidedef = frontSd, BackSidedef = -1 });
+
+    void AddLD2Door(int sv, int ev, int frontSd, int backSd) =>
+        _state.Map.Linedefs.Add(new DoomLinedef { StartVertex = sv, EndVertex = ev, Flags = 0x04, Special = 1, FrontSidedef = frontSd, BackSidedef = backSd });
+
+    // Find one-sided linedefs at Y=wallY belonging to adjSector that overlap [spanX1,spanX2].
+    // Split each: keep non-overlapping pieces as solid walls, convert overlapping portion to
+    // a two-sided DR door face connecting adjSector ↔ doorSector.
+    // Returns true if at least one wall was found and replaced.
+    bool SplitHorizontalWall(int wallY, int spanX1, int spanX2, int adjSector, int doorSector, string doorTex)
+    {
+        var map = _state.Map;
+        var cands = new List<(int idx, int ldX1, int ldX2, bool rightward, string wallTex)>();
+        for (int i = 0; i < map.Linedefs.Count; i++)
+        {
+            var ld = map.Linedefs[i];
+            if (ld.BackSidedef >= 0 || ld.FrontSidedef < 0 || ld.FrontSidedef >= map.Sidedefs.Count) continue;
+            if (map.Sidedefs[ld.FrontSidedef].Sector != adjSector) continue;
+            var sv = map.Vertices[ld.StartVertex];
+            var ev = map.Vertices[ld.EndVertex];
+            if (sv.Y != wallY || ev.Y != wallY) continue;
+            int lx1 = Math.Min(sv.X, ev.X), lx2 = Math.Max(sv.X, ev.X);
+            if (Math.Max(lx1, spanX1) >= Math.Min(lx2, spanX2)) continue;
+            cands.Add((i, lx1, lx2, sv.X < ev.X, map.Sidedefs[ld.FrontSidedef].MiddleTexture));
+        }
+        if (cands.Count == 0) return false;
+
+        // Process highest index first so removals don't shift lower indices
+        cands.Sort((a, b) => b.idx.CompareTo(a.idx));
+        foreach (var (idx, ldX1, ldX2, rightward, wallTex) in cands)
+        {
+            int ovX1 = Math.Max(ldX1, spanX1), ovX2 = Math.Min(ldX2, spanX2);
+            RemoveLinedefAt(idx);
+            // Vertex indices are stable (RemoveLinedefAt only touches linedefs+sidedefs)
+            int vX1 = GetOrCreateVertex(ldX1, wallY), vOv1 = GetOrCreateVertex(ovX1, wallY),
+                vOv2 = GetOrCreateVertex(ovX2, wallY), vX2 = GetOrCreateVertex(ldX2, wallY);
+            if (rightward)
+            {
+                if (ldX1 < ovX1) AddLD1(vX1, vOv1, AddSideDef(adjSector, "-", wallTex, "-"));
+                AddLD2Door(vOv1, vOv2, AddSideDef(adjSector, doorTex, "-", "-"), AddSideDef(doorSector, "-", "-", "-"));
+                if (ovX2 < ldX2) AddLD1(vOv2, vX2, AddSideDef(adjSector, "-", wallTex, "-"));
+            }
+            else
+            {
+                if (ldX2 > ovX2) AddLD1(vX2, vOv2, AddSideDef(adjSector, "-", wallTex, "-"));
+                AddLD2Door(vOv2, vOv1, AddSideDef(adjSector, doorTex, "-", "-"), AddSideDef(doorSector, "-", "-", "-"));
+                if (ldX1 < ovX1) AddLD1(vOv1, vX1, AddSideDef(adjSector, "-", wallTex, "-"));
+            }
+        }
+        return true;
+    }
+
+    // Same as above but for vertical walls at X=wallX spanning [spanY1,spanY2].
+    bool SplitVerticalWall(int wallX, int spanY1, int spanY2, int adjSector, int doorSector, string doorTex)
+    {
+        var map = _state.Map;
+        var cands = new List<(int idx, int ldY1, int ldY2, bool upward, string wallTex)>();
+        for (int i = 0; i < map.Linedefs.Count; i++)
+        {
+            var ld = map.Linedefs[i];
+            if (ld.BackSidedef >= 0 || ld.FrontSidedef < 0 || ld.FrontSidedef >= map.Sidedefs.Count) continue;
+            if (map.Sidedefs[ld.FrontSidedef].Sector != adjSector) continue;
+            var sv = map.Vertices[ld.StartVertex];
+            var ev = map.Vertices[ld.EndVertex];
+            if (sv.X != wallX || ev.X != wallX) continue;
+            int ly1 = Math.Min(sv.Y, ev.Y), ly2 = Math.Max(sv.Y, ev.Y);
+            if (Math.Max(ly1, spanY1) >= Math.Min(ly2, spanY2)) continue;
+            cands.Add((i, ly1, ly2, sv.Y < ev.Y, map.Sidedefs[ld.FrontSidedef].MiddleTexture));
+        }
+        if (cands.Count == 0) return false;
+
+        cands.Sort((a, b) => b.idx.CompareTo(a.idx));
+        foreach (var (idx, ldY1, ldY2, upward, wallTex) in cands)
+        {
+            int ovY1 = Math.Max(ldY1, spanY1), ovY2 = Math.Min(ldY2, spanY2);
+            RemoveLinedefAt(idx);
+            int vY1 = GetOrCreateVertex(wallX, ldY1), vOv1 = GetOrCreateVertex(wallX, ovY1),
+                vOv2 = GetOrCreateVertex(wallX, ovY2), vY2 = GetOrCreateVertex(wallX, ldY2);
+            if (upward)
+            {
+                if (ldY1 < ovY1) AddLD1(vY1, vOv1, AddSideDef(adjSector, "-", wallTex, "-"));
+                AddLD2Door(vOv1, vOv2, AddSideDef(adjSector, doorTex, "-", "-"), AddSideDef(doorSector, "-", "-", "-"));
+                if (ovY2 < ldY2) AddLD1(vOv2, vY2, AddSideDef(adjSector, "-", wallTex, "-"));
+            }
+            else
+            {
+                if (ldY2 > ovY2) AddLD1(vY2, vOv2, AddSideDef(adjSector, "-", wallTex, "-"));
+                AddLD2Door(vOv2, vOv1, AddSideDef(adjSector, doorTex, "-", "-"), AddSideDef(doorSector, "-", "-", "-"));
+                if (ldY1 < ovY1) AddLD1(vOv1, vY1, AddSideDef(adjSector, "-", wallTex, "-"));
+            }
+        }
+        return true;
+    }
+
+    // ── add_door ──────────────────────────────────────────────────────────
+
+    string DoAddDoor(JsonElement input)
+    {
+        int x              = GetInt(input, "X");
+        int y              = GetInt(input, "Y");
+        int width          = GetInt(input, "Width", 128);  // EW (X) size always
+        int depth          = GetInt(input, "Depth", 16);   // NS (Y) size always
+        string orientation = GetStr(input, "Orientation", "ns");
+        int frontSector    = GetInt(input, "FrontSectorIdx", -1);
+        int backSector     = GetInt(input, "BackSectorIdx",  -1);
+        int floorH         = GetInt(input, "FloorHeight", 0);
+        string doorTex     = Truncate8(GetStr(input, "DoorTexture", "BIGDOOR2"));
+        int light          = GetInt(input, "LightLevel", 160);
+
+        var map = _state.Map;
+        if (frontSector < 0 || frontSector >= map.Sectors.Count)
+            throw new ArgumentException($"FrontSectorIdx {frontSector} invalid (map has {map.Sectors.Count} sectors)");
+        if (backSector < 0 || backSector >= map.Sectors.Count)
+            throw new ArgumentException($"BackSectorIdx {backSector} invalid (map has {map.Sectors.Count} sectors)");
+        if (width <= 0 || depth <= 0)
+            throw new ArgumentException("Width and Depth must be > 0");
+
+        int sBase = map.Sectors.Count;
+        map.Sectors.Add(new DoomSector
+        {
+            FloorHeight    = (short)floorH,
+            CeilingHeight  = (short)floorH, // closed door: ceiling starts at floor
+            FloorTexture   = "CEIL5_1",
+            CeilingTexture = "CEIL5_1",
+            LightLevel     = (short)Math.Clamp(light, 0, 255)
+        });
+
+        // Corner vertices — Width=EW(X), Depth=NS(Y) always
+        int vBL = GetOrCreateVertex(x,         y);
+        int vBR = GetOrCreateVertex(x + width, y);
+        int vTR = GetOrCreateVertex(x + width, y + depth);
+        int vTL = GetOrCreateVertex(x,         y + depth);
+
+        string splitMsg = "";
+
+        if (orientation == "ew")
+        {
+            // Rooms west (frontSector) and east (backSector).
+            // Width = EW door thickness (small); Depth = NS opening height (large).
+
+            // West face: split room's east wall at X=x, or create fresh
+            bool westSplit = SplitVerticalWall(x, y, y + depth, frontSector, sBase, doorTex);
+            if (!westSplit)
+            {
+                // V3→V0 going south: right=west=frontSector
+                AddLD2Door(vTL, vBL, AddSideDef(frontSector, doorTex, "-", "-"), AddSideDef(sBase, "-", "-", "-"));
+                splitMsg += " (west face: fresh)";
+            }
+            else splitMsg += " (west face: wall split)";
+
+            // East face: split room's west wall at X=x+width, or create fresh
+            bool eastSplit = SplitVerticalWall(x + width, y, y + depth, backSector, sBase, doorTex);
+            if (!eastSplit)
+            {
+                // V1→V2 going north: right=east=backSector
+                AddLD2Door(vBR, vTR, AddSideDef(backSector, doorTex, "-", "-"), AddSideDef(sBase, "-", "-", "-"));
+                splitMsg += " (east face: fresh)";
+            }
+            else splitMsg += " (east face: wall split)";
+
+            // North side wall: V3→V2 east, right=south=door interior
+            AddLD1(vTL, vTR, AddSideDef(sBase, "-", "DOORTRAK", "-"), 0x11);
+            // South side wall: V1→V0 west, right=north=door interior
+            AddLD1(vBR, vBL, AddSideDef(sBase, "-", "DOORTRAK", "-"), 0x11);
+        }
+        else // "ns": rooms south (frontSector) and north (backSector)
+        {
+            // Width = EW opening width (large); Depth = NS door thickness (small).
+
+            // South face: split room's north wall at Y=y, or create fresh
+            bool southSplit = SplitHorizontalWall(y, x, x + width, frontSector, sBase, doorTex);
+            if (!southSplit)
+            {
+                // V0→V1 going east: right=south=frontSector
+                AddLD2Door(vBL, vBR, AddSideDef(frontSector, doorTex, "-", "-"), AddSideDef(sBase, "-", "-", "-"));
+                splitMsg += " (south face: fresh)";
+            }
+            else splitMsg += " (south face: wall split)";
+
+            // North face: split room's south wall at Y=y+depth, or create fresh
+            bool northSplit = SplitHorizontalWall(y + depth, x, x + width, backSector, sBase, doorTex);
+            if (!northSplit)
+            {
+                // V2→V3 going west: right=north=backSector
+                AddLD2Door(vTR, vTL, AddSideDef(backSector, doorTex, "-", "-"), AddSideDef(sBase, "-", "-", "-"));
+                splitMsg += " (north face: fresh)";
+            }
+            else splitMsg += " (north face: wall split)";
+
+            // East side wall: V2→V1 south, right=west=door interior
+            AddLD1(vTR, vBR, AddSideDef(sBase, "-", "DOORTRAK", "-"), 0x11);
+            // West side wall: V0→V3 north, right=east=door interior
+            AddLD1(vBL, vTL, AddSideDef(sBase, "-", "DOORTRAK", "-"), 0x11);
+        }
+
+        _state.NotifyChanged();
+        return $"Door sector {sBase} at ({x},{y}) W={width} D={depth} orient={orientation}, connects sectors {frontSector}↔{backSector}.{splitMsg}";
+    }
+
+    string DoAddArena(JsonElement input)
+    {
+        int x          = GetInt(input, "X");
+        int y          = GetInt(input, "Y");
+        int width      = GetInt(input, "Width", 512);
+        int height     = GetInt(input, "Height", 512);
+        int enemyType  = GetInt(input, "EnemyType", 3001);
+        int enemyCount = Math.Clamp(GetInt(input, "EnemyCount", 4), 1, 16);
+        bool addPlayer = TryGetBool(input, "AddPlayerStart", out bool ap) && ap;
+        int floorH     = GetInt(input, "FloorHeight", 0);
+        int ceilH      = GetInt(input, "CeilingHeight", 192);
+        string flTex   = Truncate8(GetStr(input, "FloorTexture", "FLOOR6_1"));
+        string ceTex   = Truncate8(GetStr(input, "CeilingTexture", "CEIL5_1"));
+        string wTex    = Truncate8(GetStr(input, "WallTexture", "STONE2"));
+        int light      = GetInt(input, "LightLevel", 200);
+
+        string roomResult = AddRoomCore(x, y, width, height, floorH, ceilH, flTex, ceTex, wTex, light);
+
+        int margin = 64;
+        int innerW = Math.Max(1, width  - margin * 2);
+        int innerH = Math.Max(1, height - margin * 2);
+        int cols   = (int)Math.Ceiling(Math.Sqrt(enemyCount));
+        int rows   = (int)Math.Ceiling((double)enemyCount / cols);
+
+        int placed = 0;
+        for (int r = 0; r < rows && placed < enemyCount; r++)
+        {
+            for (int c = 0; c < cols && placed < enemyCount; c++)
+            {
+                int ex = x + margin + (cols > 1 ? c * innerW / (cols - 1) : innerW / 2);
+                int ey = y + margin + (rows > 1 ? r * innerH / (rows - 1) : innerH / 2);
+                AddThingRaw(ex, ey, enemyType, 270);
+                placed++;
+            }
+        }
+
+        if (addPlayer)
+            AddThingRaw(x + width / 2, y + height / 2, 1, 90);
+
+        _state.NotifyChanged();
+        string enemyName = DoomThing.TypeNames.TryGetValue(enemyType, out var n) ? n : $"Type {enemyType}";
+        return $"{roomResult}. Placed {enemyCount}× {enemyName}" + (addPlayer ? " + Player 1 Start" : "");
+    }
+
+    string DoApplyTemplate(JsonElement input)
+    {
+        string template  = GetStr(input, "Template", "dungeon_start").ToLowerInvariant();
+        int x            = GetInt(input, "X");
+        int y            = GetInt(input, "Y");
+        int scale        = Math.Max(1, GetInt(input, "Scale", 1));
+        string wTex      = Truncate8(GetStr(input, "WallTexture",    "STARTAN3"));
+        string flTex     = Truncate8(GetStr(input, "FloorTexture",   "FLOOR4_8"));
+        string ceTex     = Truncate8(GetStr(input, "CeilingTexture", "CEIL3_5"));
+        int light        = GetInt(input, "LightLevel", 160);
+        bool addEnemies  = !TryGetBool(input, "AddEnemies",     out bool ae) || ae;
+        bool addPlayer   = !TryGetBool(input, "AddPlayerStart", out bool ap) || ap;
+
+        int S(int v) => v * scale;
+
+        switch (template)
+        {
+            case "dungeon_start":
+            {
+                // Entrance room
+                AddRoomCore(x,            y, S(256), S(256), 0, 128, flTex, ceTex, wTex, light);
+                // Left side room (dimmer)
+                AddRoomCore(x - S(192), y + S(32), S(192), S(192), 0, 128, flTex, ceTex, wTex, light - 20);
+                // Right side room (dimmer)
+                AddRoomCore(x + S(256), y + S(32), S(192), S(192), 0, 128, flTex, ceTex, wTex, light - 20);
+                // North corridor (dark)
+                AddRoomCore(x + S(96),  y + S(256), S(64), S(128), 0, 128, "FLAT1", ceTex, wTex, light - 40);
+
+                if (addPlayer)  AddThingRaw(x + S(128), y + S(128), 1,    90);
+                if (addEnemies) { AddThingRaw(x - S(96),  y + S(128), 3004, 270); AddThingRaw(x + S(352), y + S(128), 3004, 90); }
+                _state.NotifyChanged();
+                return $"Template 'dungeon_start' at ({x},{y}): entrance + 2 side rooms + north corridor";
+            }
+            case "cross":
+            {
+                AddRoomCore(x + S(128), y + S(128), S(256), S(256), 0, 128, flTex, ceTex, wTex, light);      // hub
+                AddRoomCore(x + S(192), y + S(384), S(128), S(192), 0, 128, flTex, ceTex, wTex, light - 20); // north
+                AddRoomCore(x + S(192), y - S(192), S(128), S(192), 0, 128, flTex, ceTex, wTex, light - 20); // south
+                AddRoomCore(x + S(384), y + S(192), S(192), S(128), 0, 128, flTex, ceTex, wTex, light - 20); // east
+                AddRoomCore(x - S(192), y + S(192), S(192), S(128), 0, 128, flTex, ceTex, wTex, light - 20); // west
+
+                if (addPlayer)  AddThingRaw(x + S(256), y + S(256), 1, 90);
+                if (addEnemies)
+                {
+                    AddThingRaw(x + S(256), y + S(480), 3001, 270);
+                    AddThingRaw(x + S(256), y - S(96),  3001, 90);
+                    AddThingRaw(x + S(480), y + S(256), 3001, 180);
+                    AddThingRaw(x - S(96),  y + S(256), 3001, 0);
+                }
+                _state.NotifyChanged();
+                return $"Template 'cross' at ({x},{y}): central hub + 4 arms";
+            }
+            case "l_shape":
+            {
+                AddRoomCore(x,          y, S(384), S(192), 0, 128, flTex, ceTex, wTex, light);           // horizontal leg
+                AddRoomCore(x + S(256), y + S(192), S(128), S(256), 0, 128, flTex, ceTex, wTex, light);  // vertical leg
+
+                if (addPlayer)  AddThingRaw(x + S(96),  y + S(96),  1,    0);
+                if (addEnemies) AddThingRaw(x + S(320), y + S(320), 3001, 180);
+                _state.NotifyChanged();
+                return $"Template 'L_shape' at ({x},{y}): two rooms at right angle";
+            }
+            case "boss_room":
+            {
+                AddRoomCore(x + S(192), y, S(128), S(192), 0, 128, flTex, ceTex, wTex, light);                   // antechamber
+                AddRoomCore(x, y + S(192), S(512), S(512), 0, 192, "FLOOR6_2", "CEIL5_2", "STONE2", 220);        // boss arena
+
+                if (addPlayer)  AddThingRaw(x + S(256), y + S(96), 1, 90);
+                if (addEnemies)
+                {
+                    AddThingRaw(x + S(256), y + S(448), 3003, 270); // Baron of Hell (boss)
+                    AddThingRaw(x + S(64),  y + S(320), 3001, 0);
+                    AddThingRaw(x + S(448), y + S(320), 3001, 180);
+                    AddThingRaw(x + S(64),  y + S(576), 3001, 0);
+                    AddThingRaw(x + S(448), y + S(576), 3001, 180);
+                }
+                _state.NotifyChanged();
+                return $"Template 'boss_room' at ({x},{y}): antechamber + boss arena with Baron of Hell + 4 Imps";
+            }
+            default:
+                throw new ArgumentException($"Unknown template '{template}'. Valid: dungeon_start, cross, L_shape, boss_room");
+        }
     }
 
     string DoClearMap()

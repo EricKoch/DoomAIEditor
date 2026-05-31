@@ -13,7 +13,13 @@
       "Bash(unzip -p anthropic.12.17.0.nupkg lib/net8.0/Anthropic.xml)",
       "Bash(dotnet list *)",
       "Bash(cat)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(git push *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\dev\\\\DoomAIEditor\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\dev\\\\DoomAIEditor\" | Format-Table Name, @{Name=\"Type\";Expression={if\\($_.PSIsContainer\\){\"Directory\"}else{\"File\"}}})",
+      "Bash(xargs wc -l)"
     ]
   }
 }
